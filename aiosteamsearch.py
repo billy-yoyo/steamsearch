@@ -165,8 +165,7 @@ def _check_session_set():
     if not isinstance(STEAM_KEY, str) or STEAM_SESSION == "":
         raise SteamSessionNotSet
 
-@asyncio.coroutine
-def exchange(amount, from_curr, to_curr, timeout=10):
+async def exchange(amount, from_curr, to_curr, timeout=10):
     """Converts an amount of money from one currency to another
 
     Args:
@@ -179,12 +178,11 @@ def exchange(amount, from_curr, to_curr, timeout=10):
         float: the converted amount of money to 2 d.p., or the original amount of the conversion failed.
     """
     try:
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                resp = yield from session.get("http://api.fixer.io/latest?symbols=" + from_curr + "," + to_curr)
-                data = yield from resp.json()
-                if "rates" in data:
-                    return int((amount / data["rates"][from_curr]) * data["rates"][to_curr] * 100)/100
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            resp = await session.get("https://api.fixer.io/latest?symbols=" + from_curr + "," + to_curr, timeout=timeout)
+            data = await resp.json()
+            if "rates" in data:
+                return int((amount / data["rates"][from_curr]) * data["rates"][to_curr] * 100)/100
     except:
         return amount
 
@@ -252,8 +250,7 @@ class GamePageResult:
             if pricesoup is not None:
                 self.discountPrice = pricesoup.get_text().replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").replace("(", "").replace(")", "").replace("-", "")
 
-    @asyncio.coroutine
-    def update_price(self, currency, currency_symbol):
+    async     def update_price(self, currency, currency_symbol):
         """Attempts to convert the price to GBP
 
         Args:
@@ -263,7 +260,7 @@ class GamePageResult:
         if currency != "GBP":
             try:
                 if self.price != "???" and self.price != "" and self.price != "Free to Play":
-                    rawprice = yield from exchange(float(self.price[1:]), "GBP", currency)
+                    rawprice = await exchange(float(self.price[1:]), "GBP", currency)
                     self.price = currency_symbol + str(rawprice)
             except:
                 if STEAM_PRINTING:
@@ -286,7 +283,7 @@ class GameResult:
         self.id = linkspl[4]
 
 
-        self.image = None #"http://cdn.edgecast.steamstatic.com/steam/apps/%s/capsule_184x69.jpg" % self.id
+        self.image = None #"https://cdn.edgecast.steamstatic.com/steam/apps/%s/capsule_184x69.jpg" % self.id
         imgsoup = soup.find("img")
         if imgsoup is not None:
             self.image = imgsoup.get("src")
@@ -307,7 +304,7 @@ class GameResult:
         for span in reviewsoup:
             cls = span.get("class")
             if cls is not None and "search_review_summary" in cls:
-                reviewRaw = span.get("data-store-tooltip").split("<br>")
+                reviewRaw = span.get("data-tooltip-html").split("<br>")
                 self.review = reviewRaw[0]
                 self.reviewLong = reviewRaw[1]
                 break
@@ -346,8 +343,7 @@ class GameResult:
         else:
             return self.discountPrice + " (" + self.discount + ")"
 
-    @asyncio.coroutine
-    def update_price(self, currency, currency_symbol):
+    async def update_price(self, currency, currency_symbol):
         """Attempts to convert the price to GBP
 
         Args:
@@ -357,7 +353,7 @@ class GameResult:
         if currency != "GBP":
             try:
                 if self.price != "???" and self.price != "" and self.price != "Free to Play":
-                    rawprice = yield from exchange(float(self.price[1:]), "GBP", currency)
+                    rawprice = await exchange(float(self.price[1:]), "GBP", currency)
                     self.price = currency_symbol + str(rawprice)
             except:
                 if STEAM_PRINTING:
@@ -520,8 +516,7 @@ class TopResult:
         else:
             return self.discountPrice + " (" + self.discount + ")"
 
-    @asyncio.coroutine
-    def update_price(self, currency, currency_symbol):
+    async     def update_price(self, currency, currency_symbol):
         """Attempts to convert the price to GBP
 
         Args:
@@ -531,11 +526,11 @@ class TopResult:
         if currency != "GBP":
             try:
                 if self.price != "???" and self.price != "" and self.price != "Free to Play":
-                    rawprice = yield from exchange(float(self.price[1:]), "GBP", currency)
+                    rawprice = await exchange(float(self.price[1:]), "GBP", currency)
                     self.price = currency_symbol + str(rawprice)
 
                 if self.discountPrice != "???" and self.price != "":
-                    rawdiscountprice = yield from exchange(float(self.discountPrice[1:]), "GBP", currency)
+                    rawdiscountprice = await exchange(float(self.discountPrice[1:]), "GBP", currency)
                     self.discountPrice = currency_symbol + str(rawdiscountprice)
             except:
                 if STEAM_PRINTING:
@@ -584,14 +579,12 @@ class SteamSaleResult(TopResult):
         self.reviewLong = "???"
         self.released = "???"
 
-    @asyncio.coroutine
-    def get_title(self, cc="gb", timeout=10):
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                resp = yield from session.get("http://store.steampowered.com/api/appdetails/?appids=" + self.id)
-                data = yield from resp.json()
+    async def get_title(self, cc="gb", timeout=10):
+        async with aiohttp.ClientSession() as session:
+            resp = await session.get("https://store.steampowered.com/api/appdetails/?appids=" + self.id, timeout=timeout)
+            data = await resp.json()
 
-                self.title = parse.unquote(data[self.id]["data"]["name"])
+            self.title = parse.unquote(data[self.id]["data"]["name"])
 
 class UserResult:
     """Class containing information about a specific user"""
@@ -920,7 +913,7 @@ class ItemResult:
         iconindex = text.find('"icon_url":')
         if iconindex > 0:
             iconurl = text[iconindex+len('"icon_url":'):text.find(',', iconindex)].replace(" ", "").replace('"', "")
-            self.icon = "http://steamcommunity-a.akamaihd.net/economy/image/" + iconurl
+            self.icon = "https://steamcommunity-a.akamaihd.net/economy/image/" + iconurl
         elif STEAM_PRINTING:
             print("failed to find icon")
 
@@ -946,7 +939,7 @@ class ItemResult:
             self.actions = raw.get("actions", [])
             self.name = raw.get("name", "???")
             self.gameIcon = raw.get("app_icon", "???")
-            self.icon = "http://steamcommunity-a.akamaihd.net/economy/image/" + raw.get("icon_url", "???")
+            self.icon = "https://steamcommunity-a.akamaihd.net/economy/image/" + raw.get("icon_url", "???")
             self.type = raw.get("type", "???")
             self.desc = [BeautifulSoup(x.get("value", ""), "html.parser").get_text() for x in raw.get("descriptions", [])]
         except:
@@ -959,8 +952,7 @@ class ItemResult:
             if STEAM_PRINTING:
                 print("failed to load market data")
 
-    @asyncio.coroutine
-    def update_price(self, currency, currency_symbol):
+    async def update_price(self, currency, currency_symbol):
         """Attempts to convert the price to GBP
 
         Args:
@@ -968,137 +960,129 @@ class ItemResult:
             currency_symbol (str): The currency symbol to add to the start of the price
             """
         try:
-            rawprice = yield from exchange(float(self.price.replace(",", ".")), self.currency, currency)
+            rawprice = await exchange(float(self.price.replace(",", ".")), self.currency, currency)
             self.price = currency_symbol + str(rawprice)
         except:
             if STEAM_PRINTING:
                 print("failed to convert currency (" + self.currency + ")")
 
 
-@asyncio.coroutine
-def check_game_sales(checks, old, optional_test=None, timeout=120):
+async def check_game_sales(checks, old, optional_test=None, timeout=120):
     """
 
-    :param checks: a list of tuples (gameid, percent, cc, other)
+    :param checks: a list of tuples (gameid, percent, cc, other...)
     :param old: a dict of games found last time {gameid: percent}
-    :return: a list of tuples (gameid, check_percent, old_percent, price_overview, name, other)
+    :return: a list of tuples (gameid, check_percent, old_percent, price_overview, name, other...)
     """
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            cached = optional_test or {}
-            print("useing optional test: %s" % cached)
-            results, new_old = [], {}
+    async with aiohttp.ClientSession() as session:
+        cached = optional_test or {}
+        print("useing optional test: %s" % cached)
+        results, new_old = [], {}
 
-            print("using checks: %s" % str(checks))
+        print("using checks: %s" % str(checks))
 
-            for check in checks:
-                try:
-                    if check[0] not in cached:
-                        resp = yield from session.get("http://store.steampowered.com/api/appdetails/?appids=" + check[0] + "&cc=" + check[2])
-                        json = yield from resp.json()
+        for check in checks:
+            try:
+                if check[0] not in cached:
+                    resp = await session.get("https://store.steampowered.com/api/appdetails/?appids=" + check[0] + "&cc=" + check[2], timeout=timeout)
+                    json = await resp.json()
 
-                        if not isinstance(json, dict):
-                            print("failed to find percent for %s" % check[0])
-                            continue
+                    if not isinstance(json, dict):
+                        print("failed to find percent for %s" % check[0])
+                        continue
 
-                        if json[check[0]]["success"]:
-                            if "price_overview" not in json[check[0]]["data"]:
-                                cached[check[0]] = None
-                                continue
-                            price_overview = json[check[0]]["data"]["price_overview"]
-                            cached[check[0]] = (price_overview, json[check[0]]["data"]["name"])
-                        else:
+                    if json[check[0]]["success"]:
+                        if "price_overview" not in json[check[0]]["data"]:
                             cached[check[0]] = None
+                            continue
+                        price_overview = json[check[0]]["data"]["price_overview"]
+                        cached[check[0]] = (price_overview, json[check[0]]["data"]["name"])
+                    else:
+                        cached[check[0]] = None
 
-                        resp.close()
+                    resp.close()
 
-                    if cached[check[0]] is not None:
-                        result = cached[check[0]]
-                        old_percent = float(old.get(check[0], 0))
-                        if (result[0]["discount_percent"] < old_percent and old_percent >= float(check[1])) or (result[0]["discount_percent"] >= float(check[1]) and result[0]["discount_percent"] != old_percent):
-                            results.append([check[0], float(check[1]), old_percent, result[0], result[1]] + list(check[3:]))
-                except:
-                    pass
-            for gameid in cached:
-                if cached[gameid] is not None:
-                    new_old[gameid] = cached[gameid][0]["discount_percent"]
-                else:
-                    new_old[gameid] = 0
-            return results, new_old
+                if cached[check[0]] is not None:
+                    result = cached[check[0]]
+                    print(result)
+                    old_percent = float(old.get(check[0], 0))
+                    new_percent = float(result[0]["discount_percent"])
+                    required_percent = float(check[1])
+                    if new_percent >= required_percent and new_percent != old_percent:
+                        results.append([check[0], float(check[1]), old_percent, result[0], result[1]] + list(check[3:]))
+            except:
+                print("[WARNING] failed to process check %s" % check)
+                pass
+        for gameid in cached:
+            if cached[gameid] is not None:
+                new_old[gameid] = float(cached[gameid][0]["discount_percent"])
+            else:
+                new_old[gameid] = 0
+        return results, new_old
 
-@asyncio.coroutine
-def is_valid_game_id(appid, timeout=10):
+
+async def is_valid_game_id(appid, timeout=10):
     if not isinstance(appid, str):
         return False
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get( "http://store.steampowered.com/api/appdetails/?appids=" + appid)
-            json = yield from resp.json()
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get( "https://store.steampowered.com/api/appdetails/?appids=" + appid, timeout=timeout)
+        json = await resp.json()
 
-            return json[appid]["success"]
+        return json[appid]["success"]
 
 
-@asyncio.coroutine
-def get_game_name_by_id(appid, timeout=10):
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/api/appdetails/?appids=" + appid)
-            data = yield from resp.json()
+async def get_game_name_by_id(appid, timeout=10):
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/api/appdetails/?appids=" + appid, timeout=timeout)
+        data = await resp.json()
 
-            return parse.unquote(data[appid]["data"]["name"])
+        return parse.unquote(data[appid]["data"]["name"])
 
-@asyncio.coroutine
-def get_game_by_id(appid, timeout=10, cc="gb"):
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/app/" + appid + "/?cc=" + cc)
-            text = yield from resp.read()
-            soup = BeautifulSoup(text, "html.parser")
+async def get_game_by_id(appid, timeout=10, cc="gb"):
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/app/" + appid + "/?cc=" + cc, timeout=timeout)
+        text = await resp.read()
+        soup = BeautifulSoup(text, "html.parser")
 
-            return GamePageResult("http://store.steampowered.com/app/" + appid, appid, soup)
+        return GamePageResult("https://store.steampowered.com/app/" + appid, appid, soup)
 
-@asyncio.coroutine
-def get_recommendations(appid, timeout=10):
+async def get_recommendations(appid, timeout=10):
     appid = str(appid)
     similar = []
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/recommended/morelike/app/" + appid)
-            text = yield from resp.text()
-            print(text)
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/recommended/morelike/app/" + appid, timeout=timeout)
+        text = await resp.text()
+        print(text)
 
-            soup = BeautifulSoup(text, "html.parser")
+        soup = BeautifulSoup(text, "html.parser")
 
 
-            items = soup.find_all("div", {"class": "similar_grid_item"})
-            print("found %s items" % len(items))
-            for item in items:
-                subsoup = item.find("div", {"class": "similar_grid_capsule"})
-                if subsoup is not None:
-                    similar_id = subsoup.get("data-ds-appid")
-                    if similar_id is not None:
-                        similar.append(similar_id)
-                    else:
-                        print("failed to find appid")
+        items = soup.find_all("div", {"class": "similar_grid_item"})
+        print("found %s items" % len(items))
+        for item in items:
+            subsoup = item.find("div", {"class": "similar_grid_capsule"})
+            if subsoup is not None:
+                similar_id = subsoup.get("data-ds-appid")
+                if similar_id is not None:
+                    similar.append(similar_id)
                 else:
-                    print("failed to get item")
+                    print("failed to find appid")
+            else:
+                print("failed to get item")
     return similar
 
-@asyncio.coroutine
-def get_user_level(userid, timeout=10, be_specific=False):
+async def get_user_level(userid, timeout=10, be_specific=False):
     if not is_integer(userid):
-        userid = yield from search_for_userid(userid, timeout=timeout, be_specific=be_specific)
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key=%s&steamid=%s" % (STEAM_KEY, userid))
-            data = yield from resp.json()
+        userid = await search_for_userid(userid, timeout=timeout, be_specific=be_specific)
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key=%s&steamid=%s" % (STEAM_KEY, userid), timeout=timeout)
+        data = await resp.json()
 
-            if "response" in data:
-                return data["response"].get("player_level")
+        if "response" in data:
+            return data["response"].get("player_level")
             return None
 
-@asyncio.coroutine
-def get_games(term, timeout=10, limit=-1, cc="gb"):
+async def get_games(term, timeout=10, limit=-1, cc="gb"):
     """Search for a game on steam
 
     Args:
@@ -1108,79 +1092,69 @@ def get_games(term, timeout=10, limit=-1, cc="gb"):
     Returns:
         a list of GameResult objects containing the results
     """
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/search/?term=" + parse.quote(term) + "&cc=" + cc, timeout=timeout)
+        text = await resp.read()
+        soup = BeautifulSoup(text, "html.parser")
 
-            resp = yield from session.get("http://store.steampowered.com/search/?term=" + parse.quote(term) + "&cc=" + cc)
-            text = yield from resp.read()
-            soup = BeautifulSoup(text, "html.parser")
-
-            subsoup = soup.findAll("div", {"id": "search_result_container"})[0]
-            rawResults = subsoup.findAll("a")
-            results = []
-            n = 0
-            for x in rawResults:
-                if n >= limit > 0:
-                    break
-                n += 1
-                cls = x.get("class")
-                if cls is not None and "search_result_row" in cls:
-                    gr = GameResult(x)
-                    #yield from gr.update_price(currency, currency_symbol)
-                    results.append(gr)
-            return results
+        subsoup = soup.findAll("div", {"id": "search_result_container"})[0]
+        rawResults = subsoup.findAll("a")
+        results = []
+        n = 0
+        for x in rawResults:
+            if n >= limit > 0:
+                break
+            n += 1
+            cls = x.get("class")
+            if cls is not None and "search_result_row" in cls:
+                gr = GameResult(x)
+                #await gr.update_price(currency, currency_symbol)
+                results.append(gr)
+        return results
 
 
-@asyncio.coroutine
-def category_search(link, timeout=10, limit=-1, cc="gb"):
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/" + link + "&cc=" + cc)
-            text = yield from resp.read()
-            soup = BeautifulSoup(text, "html.parser")
+async def category_search(link, timeout=10, limit=-1, cc="gb"):
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/" + link + "&cc=" + cc, timeout=timeout)
+        text = await resp.read()
+        soup = BeautifulSoup(text, "html.parser")
 
-            results = []
-            soups = soup.find_all("a", {"class": "search_result_row"})
-            for subsoup in soups:
-                results.append(CategoryResult(subsoup))
-                if 0 < limit <= len(results):
-                    break
-            return results
+        results = []
+        soups = soup.find_all("a", {"class": "search_result_row"})
+        for subsoup in soups:
+            results.append(CategoryResult(subsoup))
+            if 0 < limit <= len(results):
+                break
+        return results
 
-@asyncio.coroutine
-def top_search(*args, **kwargs):
-    result = yield from category_search("search/?filter=topsellers", *args, **kwargs)
+async def top_search(*args, **kwargs):
+    result = await category_search("search/?filter=topsellers", *args, **kwargs)
     return result
 
-@asyncio.coroutine
-def upcoming_search(*args, **kwargs):
-    result = yield from category_search("search/?filter=comingsoon", *args, **kwargs)
+async def upcoming_search(*args, **kwargs):
+    result = await category_search("search/?filter=comingsoon", *args, **kwargs)
     return result
 
-@asyncio.coroutine
-def specials_search(*args, **kwargs):
-    result = yield from category_search("search/?specials=1", *args, **kwargs)
+async def specials_search(*args, **kwargs):
+    result = await category_search("search/?specials=1", *args, **kwargs)
     return result
 
-@asyncio.coroutine
-def new_search(timeout=10, limit=-1, cc="gb"):
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/explore/new/?cc=%s" % cc)
-            text = yield from resp.read()
-            soup = BeautifulSoup(text, "html.parser")
+async def new_search(timeout=10, limit=-1, cc="gb"):
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/explore/new/?cc=%s" % cc, timeout=timeout)
+        text = await resp.read()
+        soup = BeautifulSoup(text, "html.parser")
 
-            results = []
-            subsoups = soup.find_all("a", {"class": "tab_item"})
-            for subsoup in subsoups:
-                results.append(NewCategoryResult(subsoup))
-                if 0 < limit <= len(results):
-                    break
+        results = []
+        subsoups = soup.find_all("a", {"class": "tab_item"})
+        for subsoup in subsoups:
+            results.append(NewCategoryResult(subsoup))
+            if 0 < limit <= len(results):
+                break
 
-            return results
+        return results
 
-@asyncio.coroutine
-def new_specials(timeout=10, limit=-1, cc="gb"):
+async def new_specials(timeout=10, limit=-1, cc="gb"):
     """Search for a game on steam
 
     Args:
@@ -1190,32 +1164,29 @@ def new_specials(timeout=10, limit=-1, cc="gb"):
     Returns:
         a list of GameResult objects containing the results
     """
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/search/?specials=1&cc=" + cc, timeout=timeout)
+        text = await resp.read()
+        soup = BeautifulSoup(text, "html.parser")
 
-            resp = yield from session.get("http://store.steampowered.com/search/?specials=1&cc=" + cc)
-            text = yield from resp.read()
-            soup = BeautifulSoup(text, "html.parser")
-
-            subsoup = soup.findAll("div", {"id": "search_result_container"})[0]
-            rawResults = subsoup.findAll("a")
-            results = []
-            n = 0
-            for x in rawResults:
-                if n >= limit > 0:
-                    break
-                n += 1
-                cls = x.get("class")
-                if cls is not None and "search_result_row" in cls:
-                    gr = GameResult(x)
-                    #yield from gr.update_price(currency, currency_symbol)
-                    results.append(gr)
-            return results
+        subsoup = soup.findAll("div", {"id": "search_result_container"})[0]
+        rawResults = subsoup.findAll("a")
+        results = []
+        n = 0
+        for x in rawResults:
+            if n >= limit > 0:
+                break
+            n += 1
+            cls = x.get("class")
+            if cls is not None and "search_result_row" in cls:
+                gr = GameResult(x)
+                #await gr.update_price(currency, currency_symbol)
+                results.append(gr)
+        return results
 
 
 
-@asyncio.coroutine
-def top_sellers(timeout=60, limit=-1, cc="gb"):
+async def top_sellers(timeout=60, limit=-1, cc="gb"):
     """gets the top sellers on the front page of the store
 
     Args:
@@ -1223,39 +1194,37 @@ def top_sellers(timeout=60, limit=-1, cc="gb"):
         limit (int, optional): how many results it should return, 0 or less returns every result found
     Returns:
         a list of TopResult objects"""
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/?cc=" + cc)
-            text = yield from resp.read()
-            soup = BeautifulSoup(text, "html.parser")
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/?cc=" + cc, timeout=timeout)
+        text = await resp.read()
+        soup = BeautifulSoup(text, "html.parser")
 
-            subsoup = soup.find("div", {"id": "tab_topsellers_content"})
-            rawResults = subsoup.findAll("a", recursive=False)
-            results = []
-            n = 0
-            for x in rawResults:
-                if n >= limit > 0:
-                    break
+        subsoup = soup.find("div", {"id": "tab_topsellers_content"})
+        rawResults = subsoup.findAll("a", recursive=False)
+        results = []
+        n = 0
+        for x in rawResults:
+            if n >= limit > 0:
+                break
 
-                cls = x.get("class")
-                if cls is not None and "tab_item" in cls:
-                #if cls is not None and "sale_capsule" in cls:
-                    tr = TopResult(x)
-                    results.append(tr)
-                    n += 1
-                    #try:
-                    #    tr = SteamSaleResult(x)
-                    #    yield from tr.get_title(cc=cc, timeout=timeout)
-                    #    #yield from tr.update_price(currency, currency_symbol)
-                    #    results.append(tr)
-                    #    n += 1
-                    #except:
-                    #    print("WARNING: failed to create result")
-            return results
+            cls = x.get("class")
+            if cls is not None and "tab_item" in cls:
+            #if cls is not None and "sale_capsule" in cls:
+                tr = TopResult(x)
+                results.append(tr)
+                n += 1
+                #try:
+                #    tr = SteamSaleResult(x)
+                #    await tr.get_title(cc=cc, timeout=timeout)
+                #    #await tr.update_price(currency, currency_symbol)
+                #    results.append(tr)
+                #    n += 1
+                #except:
+                #    print("WARNING: failed to create result")
+        return results
 
 
-@asyncio.coroutine
-def new_releases(timeout=10, limit=-1, cc="gb"):
+async def new_releases(timeout=10, limit=-1, cc="gb"):
     """gets the new releases on the front page of the store
 
     Args:
@@ -1263,39 +1232,37 @@ def new_releases(timeout=10, limit=-1, cc="gb"):
         limit (int, optional): how many results it should return, 0 or less returns every result found
     Returns:
         a list of TopResult objects"""
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/?cc=" + cc)
-            text = yield from resp.read()
-            soup = BeautifulSoup(text, "html.parser")
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/?cc=" + cc, timeout=timeout)
+        text = await resp.read()
+        soup = BeautifulSoup(text, "html.parser")
 
-            subsoup = soup.find("div", {"id": "tab_newreleases_content"})
-            rawResults = subsoup.findAll("a", recursive=False)
-            results = []
-            n = 0
-            for x in rawResults:
-                if n >= limit > 0:
-                    break
-                cls = x.get("class")
+        subsoup = soup.find("div", {"id": "tab_newreleases_content"})
+        rawResults = subsoup.findAll("a", recursive=False)
+        results = []
+        n = 0
+        for x in rawResults:
+            if n >= limit > 0:
+                break
+            cls = x.get("class")
 
-                if cls is not None and "tab_item" in cls:
-                #if cls is not None and "sale_capsule" in cls:
-                    tr = TopResult(x)
-                    results.append(tr)
-                    n += 1
-                    #try:
-                    #    tr = SteamSaleResult(x)
-                    #    yield from tr.get_title(cc=cc, timeout=timeout)
-                    #    #yield from tr.update_price(currency, currency_symbol)
-                    #    results.append(tr)
-                    #    n += 1
-                    #except:
-                    #    print("WARNING: failed to create result")
-            return results
+            if cls is not None and "tab_item" in cls:
+            #if cls is not None and "sale_capsule" in cls:
+                tr = TopResult(x)
+                results.append(tr)
+                n += 1
+                #try:
+                #    tr = SteamSaleResult(x)
+                #    await tr.get_title(cc=cc, timeout=timeout)
+                #    #await tr.update_price(currency, currency_symbol)
+                #    results.append(tr)
+                #    n += 1
+                #except:
+                #    print("WARNING: failed to create result")
+        return results
 
 
-@asyncio.coroutine
-def upcoming(timeout=10, limit=-1, cc="gb"):
+async def upcoming(timeout=10, limit=-1, cc="gb"):
     """gets the upcoming games on the front page of the store
 
     Args:
@@ -1303,38 +1270,36 @@ def upcoming(timeout=10, limit=-1, cc="gb"):
         limit (int, optional): how many results it should return, 0 or less returns every result found
     Returns:
         a list of TopResult objects"""
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/?cc=" + cc)
-            text = yield from resp.read()
-            soup = BeautifulSoup(text, "html.parser")
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/?cc=" + cc, timeout=timeout)
+        text = await resp.read()
+        soup = BeautifulSoup(text, "html.parser")
 
-            subsoup = soup.find("div", {"id": "tab_upcoming_content"})
-            rawResults = subsoup.findAll("a", recursive=False)
-            results = []
-            n = 0
-            for x in rawResults:
-                if n >= limit > 0:
-                    break
-                cls = x.get("class")
-                if cls is not None and "tab_item" in cls:
-                #if cls is not None and "sale_capsule" in cls:
-                    tr = TopResult(x)
-                    results.append(tr)
-                    n += 1
-                    #try:
-                    #    tr = SteamSaleResult(x)
-                    #    yield from tr.get_title(cc=cc, timeout=timeout)
-                    #    #yield from tr.update_price(currency, currency_symbol)
-                    #    results.append(tr)
-                    #    n += 1
-                    #except:
-                    #    print("WARNING: failed to create result")
-            return results
+        subsoup = soup.find("div", {"id": "tab_upcoming_content"})
+        rawResults = subsoup.findAll("a", recursive=False)
+        results = []
+        n = 0
+        for x in rawResults:
+            if n >= limit > 0:
+                break
+            cls = x.get("class")
+            if cls is not None and "tab_item" in cls:
+            #if cls is not None and "sale_capsule" in cls:
+                tr = TopResult(x)
+                results.append(tr)
+                n += 1
+                #try:
+                #    tr = SteamSaleResult(x)
+                #    await tr.get_title(cc=cc, timeout=timeout)
+                #    #await tr.update_price(currency, currency_symbol)
+                #    results.append(tr)
+                #    n += 1
+                #except:
+                #    print("WARNING: failed to create result")
+        return results
 
 
-@asyncio.coroutine
-def specials(timeout=10, limit=-1, cc="gb"):
+async def specials(timeout=10, limit=-1, cc="gb"):
     """gets the specials on the front page of the store
 
     Args:
@@ -1342,30 +1307,28 @@ def specials(timeout=10, limit=-1, cc="gb"):
         limit (int, optional): how many results it should return, 0 or less returns every result found
     Returns:
         a list of TopResult objects"""
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/?cc=" + cc)
-            text = yield from resp.read()
-            soup = BeautifulSoup(text, "html.parser")
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/?cc=" + cc, timeout=timeout)
+        text = await resp.read()
+        soup = BeautifulSoup(text, "html.parser")
 
-            subsoup = soup.find("div", {"id": "tab_specials_content"})
-            rawResults = subsoup.findAll("a", recursive=False)
-            results = []
-            n = 0
-            for x in rawResults:
-                if n >= limit > 0:
-                    break
-                cls = x.get("class")
-                if cls is not None and "tab_item" in cls:
-                    tr = TopResult(x)
-                    #yield from tr.update_price(currency, currency_symbol)
-                    results.append(tr)
-                    n += 1
-            return results
+        subsoup = soup.find("div", {"id": "tab_specials_content"})
+        rawResults = subsoup.findAll("a", recursive=False)
+        results = []
+        n = 0
+        for x in rawResults:
+            if n >= limit > 0:
+                break
+            cls = x.get("class")
+            if cls is not None and "tab_item" in cls:
+                tr = TopResult(x)
+                #await tr.update_price(currency, currency_symbol)
+                results.append(tr)
+                n += 1
+        return results
 
 
-@asyncio.coroutine
-def get_user(steamid, timeout=10, be_specific=False):
+async def get_user(steamid, timeout=10, be_specific=False):
     """Gets some information about a specific steamid
 
     Args:
@@ -1375,22 +1338,20 @@ def get_user(steamid, timeout=10, be_specific=False):
         a UserResult object
         """
     if not is_integer(steamid):
-        steamid = yield from search_for_userid(steamid, be_specific=be_specific)
+        steamid = await search_for_userid(steamid, be_specific=be_specific)
     if steamid is not None:
         _check_key_set()
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                resp = yield from session.get("http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + STEAM_KEY + "&steamids=" + steamid)
-                data = yield from resp.json()
+        async with aiohttp.ClientSession() as session:
+            resp = await session.get("https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + STEAM_KEY + "&steamids=" + steamid, timeout=timeout)
+            data = await resp.json()
 
-                if "response" in data and "players" in data["response"] and len(data["response"]["players"]) > 0:
-                    player = data["response"]["players"][0]
-                    return UserResult(player)
+            if "response" in data and "players" in data["response"] and len(data["response"]["players"]) > 0:
+                player = data["response"]["players"][0]
+                return UserResult(player)
     return None
 
 
-@asyncio.coroutine
-def get_user_library(steamid, timeout=10, be_specific=False):
+async def get_user_library(steamid, timeout=10, be_specific=False):
     """Gets a list of all the games a user owns
 
     Args:
@@ -1400,25 +1361,23 @@ def get_user_library(steamid, timeout=10, be_specific=False):
         a UserLibrary object
     """
     if not is_integer(steamid):
-        steamid = yield from search_for_userid(steamid, be_specific=be_specific)
+        steamid = await search_for_userid(steamid, be_specific=be_specific)
     if steamid is not None:
         _check_key_set()
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                resp = yield from session.get("http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=" + STEAM_KEY + "&steamid=" + steamid + "&format=json&include_appinfo=1&include_played_free_games=1")
-                data = yield from resp.json()
+        async with aiohttp.ClientSession() as session:
+            resp = await session.get("https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=" + STEAM_KEY + "&steamid=" + steamid + "&format=json&include_appinfo=1&include_played_free_games=1", timeout=timeout)
+            data = await resp.json()
 
-                if "response" in data:
-                    player = data["response"]
-                    return UserLibrary(player)
+            if "response" in data:
+                player = data["response"]
+                return UserLibrary(player)
     return None
 
 
 userid_cache = {}  # caches search terms to steamids
 
 
-@asyncio.coroutine
-def get_user_id(name, timeout=10):
+async def get_user_id(name, timeout=10):
     """Resolves a username to a steamid, however is limited to ONLY vanity URL's. search_user_id is recommended
 
     Args:
@@ -1431,22 +1390,19 @@ def get_user_id(name, timeout=10):
         return userid_cache[name]
     else:
         _check_key_set()
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
+        async with aiohttp.ClientSession() as session:
+            resp = await session.get("https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=" + STEAM_KEY + "&vanityurl=" + parse.quote(name), timeout=timeout)
+            data = await resp.json()
 
-                resp = yield from session.get("http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=" + STEAM_KEY + "&vanityurl=" + parse.quote(name))
-                data = yield from resp.json()
-
-                if "response" in data and "success" in data["response"] and data["response"]["success"] == 1:
-                    id = data["response"]["steamid"]
-                    if STEAM_CACHE:
-                        userid_cache[name] = id
-                    return id
-                return None
+            if "response" in data and "success" in data["response"] and data["response"]["success"] == 1:
+                id = data["response"]["steamid"]
+                if STEAM_CACHE:
+                    userid_cache[name] = id
+                return id
+            return None
 
 
-@asyncio.coroutine
-def search_for_userid(username, timeout=10, be_specific=False):
+async def search_for_userid(username, timeout=10, be_specific=False):
     """Searches for a steamid based on a username, not using vanity URLs
 
     Args:
@@ -1459,20 +1415,19 @@ def search_for_userid(username, timeout=10, be_specific=False):
         return userid_cache[username]
     else:
         if be_specific:
-            uid = yield from get_user_id(username, timeout=timeout)
+            uid = await get_user_id(username, timeout=timeout)
             return uid
         else:
-            links = yield from search_for_users(username, limit=1, timeout=timeout)
+            links = await search_for_users(username, limit=1, timeout=timeout)
             if len(links) > 0:
-                uid = yield from extract_id_from_url(links[0][0], timeout=timeout)
+                uid = await extract_id_from_url(links[0][0], timeout=timeout)
                 return uid
             else:
-                uid = yield from get_user_id(username, timeout=timeout)
+                uid = await get_user_id(username, timeout=timeout)
                 return uid
 
 
-@asyncio.coroutine
-def search_for_users(username, limit=1, timeout=10):
+async def search_for_users(username, limit=1, timeout=10):
     """Searches for basic information about users
 
     Args:
@@ -1483,25 +1438,23 @@ def search_for_users(username, limit=1, timeout=10):
         a list of tuples containing (steam_profile_url (str), steam_user_name (str))
         """
     _check_session_set()
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://steamcommunity.com/search/SearchCommunityAjax?text=" + parse.quote(username) + "&filter=users&sessionid=" + STEAM_SESSION + "&page=1", headers={"Cookie": "sessionid=" + STEAM_SESSION})
-            data = yield from resp.json()
-            soup = BeautifulSoup(data["html"], "html.parser")
-            stuff = soup.find_all("a", {"class": "searchPersonaName"})
-            links = []
-            for thing in stuff:
-                try:
-                    links.append((thing.get("href"), thing.get_text()))
-                    if len(links) >= limit > 0:
-                        return links
-                except:
-                    pass
-            return links
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://steamcommunity.com/search/SearchCommunityAjax?text=" + parse.quote(username) + "&filter=users&sessionid=" + STEAM_SESSION + "&page=1", headers={"Cookie": "sessionid=" + STEAM_SESSION}, timeout=timeout)
+        data = await resp.json()
+        soup = BeautifulSoup(data["html"], "html.parser")
+        stuff = soup.find_all("a", {"class": "searchPersonaName"})
+        links = []
+        for thing in stuff:
+            try:
+                links.append((thing.get("href"), thing.get_text()))
+                if len(links) >= limit > 0:
+                    return links
+            except:
+                pass
+        return links
 
 
-@asyncio.coroutine
-def extract_id_from_url(url, timeout=10):
+async def extract_id_from_url(url, timeout=10):
     """Extracts a steamid from a steam user's profile URL, or finds it based on a vanity URL
 
     Args:
@@ -1510,16 +1463,15 @@ def extract_id_from_url(url, timeout=10):
     Returns:
         the steamid of the user (str) or None if no steamid could be extracted
     """
-    if url.startswith("http://steamcommunity.com/profiles/"):
-        return url[len("http://steamcommunity.com/profiles/"):]
-    elif url.startswith("http://steamcommunity.com/id/"):
-        vanityname = url[len("http://steamcommunity.com/id/"):]
-        id = yield from get_user_id(vanityname, timeout=timeout)
+    if url.startswith("https://steamcommunity.com/profiles/"):
+        return url[len("https://steamcommunity.com/profiles/"):]
+    elif url.startswith("https://steamcommunity.com/id/"):
+        vanityname = url[len("https://steamcommunity.com/id/"):]
+        id = await get_user_id(vanityname, timeout=timeout)
         return id
 
 
-@asyncio.coroutine
-def get_item(appid, item_name, timeout=10, currency="GBP", currency_symbol="£"):
+async def get_item(appid, item_name, timeout=10, currency="GBP", currency_symbol="£"):
     """Gets information about an item from the market
 
     Args:
@@ -1532,27 +1484,25 @@ def get_item(appid, item_name, timeout=10, currency="GBP", currency_symbol="£")
         an ItemResult object
         """
     if not is_integer(appid):
-        appdata = yield from get_app(appid, timeout)
+        appdata = await get_app(appid, timeout)
         appid = appdata[0]
     if appid is not None:
-        item_name = yield from get_item_name(item_name, appid, timeout=timeout)
+        item_name = await get_item_name(item_name, appid, timeout=timeout)
         if item_name is not None:
-            with aiohttp.ClientSession() as session:
-                with aiohttp.Timeout(timeout):
-                    resp = yield from session.get("http://steamcommunity.com/market/listings/" + appid + "/" + parse.quote(item_name))
-                    text = yield from resp.text()
-                    soup = BeautifulSoup(text, "html.parser")
+            async with aiohttp.ClientSession() as session:
+                resp = await session.get("https://steamcommunity.com/market/listings/" + appid + "/" + parse.quote(item_name), timeout=timeout)
+                text = await resp.text()
+                soup = BeautifulSoup(text, "html.parser")
 
-                    result = ItemResult(soup)
-                    yield from result.update_price(currency, currency_symbol)
-                    return result
+                result = ItemResult(soup)
+                await result.update_price(currency, currency_symbol)
+                return result
 
 
 gameid_cache = {}  # caches search terms to (appid, appname) tuples
 
 
-@asyncio.coroutine
-def get_app(name, timeout=10):
+async def get_app(name, timeout=10):
     """Gets an appid based off of the app name
 
     Args:
@@ -1564,7 +1514,7 @@ def get_app(name, timeout=10):
     if name in gameid_cache:
         return gameid_cache[name]
     else:
-        dat = yield from get_games(name, limit=1, timeout=timeout)
+        dat = await get_games(name, limit=1, timeout=timeout)
         if len(dat) > 0:
             if STEAM_CACHE:
                 gameid_cache[name] = (dat[0].id, dat[0].title)
@@ -1576,8 +1526,7 @@ def get_app(name, timeout=10):
 item_name_cache = {}  # caches search terms to item url names
 
 
-@asyncio.coroutine
-def get_item_name(name, appid, timeout=10):
+async def get_item_name(name, appid, timeout=10):
     """Finds an item's name required for the URL of it's store page
 
     Args:
@@ -1591,85 +1540,78 @@ def get_item_name(name, appid, timeout=10):
     if cache_name in item_name_cache:
         return item_name_cache[cache_name]
     else:
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                if appid != "":
-                    resp = yield from session.get("http://steamcommunity.com/market/search?appid=" + appid + "&q=" + parse.quote(name))
-                else:
-                    resp = yield from session.get("http://steamcommunity.com/market/search?q=" + parse.quote(name))
-                text = yield from resp.text()
-                soup = BeautifulSoup(text, "html.parser")
+        async with aiohttp.ClientSession() as session:
+            if appid != "":
+                resp = await session.get("https://steamcommunity.com/market/search?appid=" + appid + "&q=" + parse.quote(name), timeout=timeout)
+            else:
+                resp = await session.get("https://steamcommunity.com/market/search?q=" + parse.quote(name), timeout=timeout)
+            text = await resp.text()
+            soup = BeautifulSoup(text, "html.parser")
 
-                namesoup = soup.find("span", {"class": "market_listing_item_name"})
-                if namesoup is not None:
-                    item_name = namesoup.get_text()
-                    if STEAM_CACHE:
-                        item_name_cache[cache_name] = item_name
-                    return item_name
-                return None
+            namesoup = soup.find("span", {"class": "market_listing_item_name"})
+            if namesoup is not None:
+                item_name = namesoup.get_text()
+                if STEAM_CACHE:
+                    item_name_cache[cache_name] = item_name
+                return item_name
+            return None
 
 
-@asyncio.coroutine
-def get_wishlist(userid, cc="gb", timeout=10, discount_only=True, be_specific=False):
+async def get_wishlist(userid, cc="gb", timeout=10, discount_only=True, be_specific=False):
     if not is_integer(userid):
-        userid = yield from search_for_userid(userid, be_specific=be_specific)
+        userid = await search_for_userid(userid, be_specific=be_specific)
     if userid is not None:
         print(userid)
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                resp = yield from session.get("http://steamcommunity.com/profiles/" + userid + "/wishlist?cc=" + cc)
-                text = yield from resp.text()
-                soup = BeautifulSoup(text, "html.parser")
+        async with aiohttp.ClientSession() as session:
+            URL = "https://store.steampowered.com/wishlist/profiles/" + userid + "/?cc=" + cc
+            print(URL)
+            resp = await session.get("https://store.steampowered.com/wishlist/profiles/" + userid + "/wishlistdata/?cc=" + cc, timeout=timeout)
+            data = await resp.json()
 
-                games = []
+            games = []
 
-                wishlist_soup = soup.find("div", {"id": "wishlist_items"})
-                if wishlist_soup is not None:
-                    wishlist_items = wishlist_soup.find_all("div", {"class": "wishlistRowItem"})
-                    for row in wishlist_items:
-                        game_link = "???"
-                        item = row.find("a", {"class": "pullup_item storepage_btn_alt"})
-                        if item is not None:
-                            game_link = item.get("href")
+            for appid in data:
+                game = data[appid]
+                name = game.get("name", "???")
+                link = "https://store.steampowered.com/app/%s/" % appid
+                price = "???"
+                subs = game.get("subs", [])
+                if len(subs) > 0:
+                    html = None
+                    discounted = False
+                    for sub in subs:
+                        if "discount_block" in sub:
+                            html = sub["discount_block"]
+                            discounted = sub.get("discount_pct", 0) > 0
+                            break
 
-                        game_name = "???"
-                        game_name_soup = row.find("h4")
-                        if game_name_soup is not None:
-                            game_name = game_name_soup.get_text()
+                    if html is not None:
+                        soup = BeautifulSoup(html, "html.parser")
+                        price_soup = soup.find("div", {"class": "discount_final_price"})
+                        if price_soup is not None:
+                            price = price_soup.get_text()
 
+                        if discounted:
+                            original_price = "???"
+                            original_price_soup = soup.find("div", {"class": "discount_original_price"})
+                            if original_price_soup is not None:
+                                original_price = original_price_soup.get_text()
 
-
-                        discount_soup = row.find("div", {"class": "discount_block"})
-                        if discount_soup is not None:
                             discount_percent = "??%"
-                            discount_percent_soup = discount_soup.find("div", {"class": "discount_pct"})
+                            discount_percent_soup = soup.find("div", {"class": "discount_pct"})
                             if discount_percent_soup is not None:
                                 discount_percent = discount_percent_soup.get_text()
 
-                            discount_price = "???"
-                            discount_price_soup = discount_soup.find("div", {"class": "discount_final_price"})
-                            if discount_price_soup is not None:
-                                discount_price = discount_price_soup.get_text()
+                            games.append((name, link, original_price, price, discount_percent))
+                            continue
 
-                            discount_original_price = "???"
-                            discount_original_price_soup = discount_soup.find("div", {"class": "discount_original_price"})
-                            if discount_original_price_soup is not None:
-                                discount_original_price = discount_original_price_soup.get_text()
+                if not discount_only:
+                    games.append((name, link, price))
 
-                            games.append((game_name, game_link, discount_original_price, discount_price, discount_percent))
-                        elif not discount_only:
-                            price = "???"
-                            price_soup = item.find("div", {"class": "price"})
-                            if price_soup is not None:
-                                price = price_soup.get_text()
-
-                            games.append((game_name, game_link, price))
-
-                return UserWishlist(games)
+            return UserWishlist(games)
 
 
-@asyncio.coroutine
-def get_screenshots(username, timeout=10, limit=-1):
+async def get_screenshots(username, timeout=10, limit=-1):
     """Searches for the most recent (public) screenshots a user has uploaded,
 
     Args:
@@ -1679,29 +1621,27 @@ def get_screenshots(username, timeout=10, limit=-1):
     Returns:
         a list of URLs (strings) linking to the screenshots
         """
-    ulinks = yield from search_for_users(username, limit=1)
+    ulinks = await search_for_users(username, limit=1)
     if len(ulinks) > 0:
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                resp = yield from session.get(ulinks[0][0] + "/screenshots/")
-                text = yield from resp.text()
-                soup = BeautifulSoup(text, "html.parser")
+        async with aiohttp.ClientSession() as session:
+            resp = await session.get(ulinks[0][0] + "/screenshots/", timeout=timeout)
+            text = await resp.text()
+            soup = BeautifulSoup(text, "html.parser")
 
-                links = []
-                screensoups = soup.find_all("a", {"class": "profile_media_item"})
-                for ssoup in screensoups:
-                    imgsoup = ssoup.find("img")
-                    if imgsoup is not None:
-                        links.append(imgsoup.get("src"))
-                        if len(links) >= limit > 0:
-                            break
-                return links
+            links = []
+            screensoups = soup.find_all("a", {"class": "profile_media_item"})
+            for ssoup in screensoups:
+                imgsoup = ssoup.find("img")
+                if imgsoup is not None:
+                    links.append(imgsoup.get("src"))
+                    if len(links) >= limit > 0:
+                        break
+            return links
     else:
         return None
 
 
-@asyncio.coroutine
-def top_game_playercounts(limit=10, timeout=10):
+async def top_game_playercounts(limit=10, timeout=10):
     """Gets the top games on steam right now by player count
 
     Args:
@@ -1710,100 +1650,92 @@ def top_game_playercounts(limit=10, timeout=10):
     Returns:
         A list of tuples in the format (current_players (str), peak_players (str), game_name (str), game_link (str))
         """
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/stats")
-            text = yield from resp.text()
-            soup = BeautifulSoup(text, "html.parser")
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/stats", timeout=timeout)
+        text = await resp.text()
+        soup = BeautifulSoup(text, "html.parser")
 
-            stats = []
-            ssoups = soup.find_all("tr", {"class": "player_count_row"})
-            for subsoup in ssoups:
-                linksoup = subsoup.find("a", {"class": "gameLink"})
-                name = linksoup.get_text()
-                link = linksoup.get("href")
+        stats = []
+        ssoups = soup.find_all("tr", {"class": "player_count_row"})
+        for subsoup in ssoups:
+            linksoup = subsoup.find("a", {"class": "gameLink"})
+            name = linksoup.get_text()
+            link = linksoup.get("href")
+            stuff = subsoup.find_all("span", {"class": "currentServers"})
+            if len(stuff) > 0:
+                current_players = stuff[0].get_text()
+                peak_players = stuff[1].get_text()
+                stats.append((current_players, peak_players, name, link))
+                if len(stats) >= limit > 0:
+                    break
+        return stats
+
+async def get_playercount(appid, timeout=10):
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?key=%s&format=json&appid=%s" % (STEAM_KEY, appid), timeout=timeout)
+        data = await resp.json()
+
+        if "response" in data:
+            return data["response"].get("player_count")
+
+async def search_for_playercount(appid, timeout=10, be_specific=False):
+    if not be_specific:
+        appid, appname = await get_app(appid)
+    else:
+        appname = appid
+
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/stats", timeout=timeout)
+        text = await resp.text()
+        soup = BeautifulSoup(text, "html.parser")
+
+        number = 0
+        ssoups = soup.find_all("tr", {"class": "player_count_row"})
+        for subsoup in ssoups:
+            number += 1
+            linksoup = subsoup.find("a", {"class": "gameLink"})
+            name = linksoup.get_text()
+            link = linksoup.get("href")
+            if link.split("/")[-2] == appid:
                 stuff = subsoup.find_all("span", {"class": "currentServers"})
                 if len(stuff) > 0:
                     current_players = stuff[0].get_text()
                     peak_players = stuff[1].get_text()
-                    stats.append((current_players, peak_players, name, link))
-                    if len(stats) >= limit > 0:
-                        break
-            return stats
-
-@asyncio.coroutine
-def get_playercount(appid, timeout=10):
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?key=%s&format=json&appid=%s" % (STEAM_KEY, appid))
-            data = yield from resp.json()
-
-            if "response" in data:
-                return data["response"].get("player_count")
-
-@asyncio.coroutine
-def search_for_playercount(appid, timeout=10, be_specific=False):
-    if not be_specific:
-        appid, appname = yield from get_app(appid)
-    else:
-        appname = appid
-
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/stats")
-            text = yield from resp.text()
-            soup = BeautifulSoup(text, "html.parser")
-
-            number = 0
-            ssoups = soup.find_all("tr", {"class": "player_count_row"})
-            for subsoup in ssoups:
-                number += 1
-                linksoup = subsoup.find("a", {"class": "gameLink"})
-                name = linksoup.get_text()
-                link = linksoup.get("href")
-                if link.split("/")[-2] == appid:
-                    stuff = subsoup.find_all("span", {"class": "currentServers"})
-                    if len(stuff) > 0:
-                        current_players = stuff[0].get_text()
-                        peak_players = stuff[1].get_text()
-                        return (name, current_players, peak_players, number, link)
+                    return (name, current_players, peak_players, number, link)
 
     if appid is None:
         return None
 
-    current_players = yield from get_playercount(appid, timeout=timeout)
+    current_players = await get_playercount(appid, timeout=timeout)
     if current_players is not None:
-        return (appname, current_players, "???", "???", "http://store.steampowered.com/app/%s/" % appid)
+        return (appname, current_players, "???", "???", "https://store.steampowered.com/app/%s/" % appid)
 
 
 
-@asyncio.coroutine
-def steam_user_data(timeout=10):
+async def steam_user_data(timeout=10):
     """Gets information about the amount of users on steam over the past 48 hours
 
     Args:
         timeout (int, optional): The amount of time before aiohttp raises a timeout error
     Returns:
         A tuple containing (min_users (int), max_users (int), current_users (int))"""
-    with aiohttp.ClientSession() as session:
-        with aiohttp.Timeout(timeout):
-            resp = yield from session.get("http://store.steampowered.com/stats/userdata.json")
-            data = yield from resp.json()
-            data = data[0]["data"]
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get("https://store.steampowered.com/stats/userdata.json", timeout=timeout)
+        data = await resp.json()
+        data = data[0]["data"]
 
-            min_users = -1
-            max_users = -1
-            for pair in data:
-                if min_users == -1 or pair[1] < min_users:
-                    min_users = pair[1]
-                if max_users == -1 or pair[1] > max_users:
-                    max_users = pair[1]
-            return min_users, max_users, data[-1][1]
-
+        min_users = -1
+        max_users = -1
+        for pair in data:
+            if min_users == -1 or pair[1] < min_users:
+                min_users = pair[1]
+            if max_users == -1 or pair[1] > max_users:
+                max_users = pair[1]
+        return min_users, max_users, data[-1][1]
 
 
-@asyncio.coroutine
-def get_user_achievements(username, gameid, timeout=10, be_specific=False):
+
+async def get_user_achievements(username, gameid, timeout=10, be_specific=False):
     """Gets information about a specific user's achievements for a specific game
 
     Args:
@@ -1813,23 +1745,21 @@ def get_user_achievements(username, gameid, timeout=10, be_specific=False):
     Returns:
         UserAchievement: the user achievements found"""
     if not is_integer(username):
-        username = yield from search_for_userid(username, timeout=timeout, be_specific=be_specific)
+        username = await search_for_userid(username, timeout=timeout, be_specific=be_specific)
     if not is_integer(gameid):
-        gameid, gamename = yield from get_app(gameid, timeout=timeout)
+        gameid, gamename = await get_app(gameid, timeout=timeout)
     else:
         gamename = "???"
     _check_key_set()
     if username is not None and gameid is not None:
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                resp = yield from session.get("http://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=" + gameid + "&key=" + STEAM_KEY + "&steamid=" + username)
-                data = yield from resp.json()
-                if "playerstats" in data and "achievements" in data["playerstats"]:
-                    return UserAchievements(gameid, gamename, data["playerstats"]["achievements"])
+        async with aiohttp.ClientSession() as session:
+            resp = await session.get("https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=" + gameid + "&key=" + STEAM_KEY + "&steamid=" + username, timeout=timeout)
+            data = await resp.json()
+            if "playerstats" in data and "achievements" in data["playerstats"]:
+                return UserAchievements(gameid, gamename, data["playerstats"]["achievements"])
 
 
-@asyncio.coroutine
-def get_global_achievements(gameid, timeout=10):
+async def get_global_achievements(gameid, timeout=10):
     """Gets information about a game's global achievement stats (name, description, percent completed)
 
     Args:
@@ -1839,33 +1769,36 @@ def get_global_achievements(gameid, timeout=10):
         GlobalAchievements: the global achievements found
         """
     if not is_integer(gameid):
-        gameid, gamename = yield from get_app(gameid, timeout=timeout)
+        gameid, gamename = await get_app(gameid, timeout=timeout)
     if gameid is not None:
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                resp = yield from session.get("http://steamcommunity.com/stats/" + gameid + "/achievements/")
-                text = yield from resp.text()
-                soup = BeautifulSoup(text, "html.parser")
+        async with aiohttp.ClientSession() as session:
+            resp = await session.get("https://steamcommunity.com/stats/" + gameid + "/achievements/", timeout=timeout)
+            text = await resp.text()
+            soup = BeautifulSoup(text, "html.parser")
 
-                return GlobalAchievements(soup)
-
+            return GlobalAchievements(soup)
 
 
-@asyncio.coroutine
-def count_user_removed(username, timeout=10, be_specific=False):
+async def count_user_removed(username, timeout=10, be_specific=False):
     if not is_integer(username):
-        username = yield from search_for_userid(username, be_specific=be_specific)
-    if username is not None:
-        with aiohttp.ClientSession() as session:
-            with aiohttp.Timeout(timeout):
-                resp = yield from session.get("http://removed.timekillerz.eu/content/steambot.php?steamid=" + parse.quote(username))
-                data = yield from resp.json()
-                if "response" in data and "removed_count" in data["response"] and "game_count" in data["response"] and data["response"]["games"] is not None\
-                        and "players" in data["response"] and len(data["response"]["players"]) > 0 and "personaname" in data["response"]["players"][0] and "total_removed_count" in data["response"]:
-                    return (data["response"]["removed_count"], data["response"]["game_count"], data["response"]["total_removed_count"], data["response"]["players"][0]["personaname"])
+        username = await search_for_userid(username, be_specific=be_specific)
 
+    if username is None:
+        return
 
-    return None
+    async with aiohttp.ClientSession() as session:
+        resp = await session.get(
+            'https://removed.timekillerz.eu/content/steambot-server.php?steamid=' + parse.quote(username),
+            timeout=timeout
+        )
+
+        _data = await resp.json()
+        data = _data['response']
+
+        try:
+            return data['removed_count'], data['game_count'], data['total_removed_count'], data['players'][0]['personaname']
+        except KeyError:
+            return  # don't want to propagate the error
 
 
 def convert_to_table(items, columns, seperator="|", spacing=1):
